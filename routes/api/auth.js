@@ -16,6 +16,8 @@ router.get("/current", authenticate, ctrl.getCurrent);
 
 router.post("/logout", authenticate, ctrl.logout);
 
+router.delete("/current", authenticate, ctrl.remove);
+
 router.patch(
   "/",
   authenticate,

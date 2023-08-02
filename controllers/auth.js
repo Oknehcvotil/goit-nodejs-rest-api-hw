@@ -19,7 +19,7 @@ const register = async (req, res) => {
     throw HttpError(409, "Email in use");
   }
 
-  const hashPassword = await await bcrypt.hash(password, 10);
+  const hashPassword = await bcrypt.hash(password, 10);
   const avatarURL = gravatar.url(email);
 
   const newUser = await User.create({
@@ -108,6 +108,13 @@ const updateAvatar = async (req, res) => {
   });
 };
 
+const remove = async (req, res) => {
+  const { _id } = req.user;
+  await User.findByIdAndRemove(_id);
+
+  res.status(200).json({ message: `User id${_id} deleted` });
+};
+
 module.exports = {
   register: ctrlWrapper(register),
   login: ctrlWrapper(login),
@@ -115,4 +122,5 @@ module.exports = {
   logout: ctrlWrapper(logout),
   updateSubscription: ctrlWrapper(updateSubscription),
   updateAvatar: ctrlWrapper(updateAvatar),
+  remove: ctrlWrapper(remove),
 };
