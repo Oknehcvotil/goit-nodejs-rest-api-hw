@@ -8,12 +8,8 @@ const {
 const request = require("supertest");
 const mongoose = require("mongoose");
 const app = require("../app");
-const { MongoClient } = require("mongodb");
-const bcrypt = require("bcrypt");
 
 const { DB_HOST } = process.env;
-
-const ctrl = require("../controllers/auth");
 
 const testUser = {
   email: "test@gmail.com",
@@ -21,55 +17,87 @@ const testUser = {
 };
 
 describe("test login", () => {
-  let connection;
-  let db;
+  let userRes;
   let server;
 
   beforeAll(async () => {
-    connection = await MongoClient.connect(DB_HOST, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    db = await connection.db();
-    
-    const users = db.collection("users");
-
-    const hashPassword = await bcrypt.hash(testUser.password, 10);
-
-    await users.insertOne({ ...testUser, password: hashPassword });
-
     mongoose
       .connect(DB_HOST)
       .then(() => {
-        server = app.listen(7880);
+        server = app.listen(7888);
       })
       .catch((error) => {
         console.log(error.message);
         process.exit(1);
       });
+
+    await request(app).post("/api/users/register").send(testUser);
   });
 
   afterAll(async () => {
-    await db.collection("users").deleteMany({});
-    await connection.close();     
+    await request(app)
+      .delete("/api/users/current")
+      .set("Authorization", `Bearer ${userRes.body.token}`);
     await mongoose.disconnect(DB_HOST).then(() => {
       server.close();
     });
   });
 
-  test("login", async () => {
-    const res = await request(app)
-      .post("/api/users/login", ctrl.login)
-      .send(testUser);
+  test("should login when request is ok", async () => {
+    userRes = await request(app).post("/api/users/login").send(testUser);
 
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("token");
-    expect(res.body).toMatchObject({
+    expect(userRes.status).toBe(200);
+    expect(userRes.body).toHaveProperty("token");
+    expect(userRes.body).toMatchObject({
       user: {
         email: expect.any(String),
         subscription: expect.any(String),
       },
     });
+  }, 10000);
+
+  test("should report error when email doesn't exists", async () => {
+    const res = await request(app).post("/api/users/login").send({
+      password: "123456",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.error.text).toMatch('{"message":"\\"email\\" is required"}');
+  }, 10000);
+
+  test("should report error when email is wrong", async () => {
+    const res = await request(app).post("/api/users/login").send({
+      email: "Wrongtest@gmail.com",
+      password: "123456",
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.error.text).toMatch("Email or password is wrong");
+  }, 10000);
+
+  test("should report error when password doesn't exists", async () => {
+    const res = await request(app).post("/api/users/login").send({
+      email: "Wrongtest@gmail.com",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.error.text).toMatch('{"message":"\\"password\\" is required"}');
+  }, 10000);
+
+  test("should report error when password is wrong", async () => {
+    const res = await request(app).post("/api/users/login").send({
+      email: "test@gmail.com",
+      password: "wrongpassword",
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.error.text).toMatch("Email or password is wrong");
+  }, 10000);
+
+  test("should report error when password and email doesn't exists", async () => {
+    const res = await request(app).post("/api/users/login");
+
+    expect(res.status).toBe(400);
+    expect(res.error.text).toMatch('{"message":"\\"password\\" is required"}');
   }, 10000);
 });
